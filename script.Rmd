@@ -1,0 +1,90 @@
+---
+title: "Machine Learning Assignment"
+output: html_document
+---
+
+### Loading libraries and input data
+
+Loading required libraries.
+
+```{r libraries}
+library(caret)
+library(rpart) 
+library(randomForest) 
+```
+
+Reading input data and setting to NA all kind of non-valid data.
+```{r input_data, cache=TRUE}
+pml_training = read.csv( "pml-training.csv",  na.strings = c("NA","#DIV/0!","") )
+pml_testing = read.csv( "pml-testing.csv",  na.strings = c("NA","#DIV/0!","") )
+
+set.seed(1234)
+
+```
+
+### Data partitioning
+
+Creating a training and testing sets from "pml_training" data, so that we can train our algorithm on the training set and adjust it using the testing set. Once the best model is selected, results are verified in the validation set from "pml_testing" data.
+
+```{r data_partitionin, cache=TRUE}
+
+inTrain = createDataPartition( y = pml_training$classe, p = 0.6, list = FALSE )
+
+training = pml_training[ inTrain, ];
+testing = pml_training[ -inTrain, ];
+validation = pml_testing;
+```
+
+### Cleaning data
+
+Removing the sample index column in the training data set
+```{r cleaning_data_1, cache=TRUE}
+training = training[,-1]
+```
+
+Removing covariates ith NA entries are filtered out and with very similar variance in the trainging data set.
+
+```{r cleaning_data_2, cache=TRUE}
+num_NAs = apply( training , 2, function(x) sum( is.na(x) ) )
+valid_cols = num_NAs == 0
+training = training[, valid_cols]
+
+nsv = nearZeroVar( training )
+training = training[,-nsv]
+```
+
+Keeping relevant covariates in the testing and validation data sets. 
+
+```{r cleaning_data_3, cache=TRUE}
+testing = testing[, names( training)]
+validation = validation[, names(training)[-58] ]
+```
+
+### Model testing
+
+Two different machine learning algorithms (decision tree and random forest) are trained on the training data and tested on testing data set.
+
+```{r model_testing_1, cache=TRUE}
+modFit1 = rpart( classe ~ ., data = training, method = "class" )
+pred1 = predict( modFit1, newdata = testing, type = "class" )
+confusionMatrix(pred1, testing$classe )
+```
+
+```{r model_testing_2, cache=TRUE}
+modFit2 = randomForest(classe ~. , data = training)
+pred2 = predict( modFit2, newdata = testing, type = "class" )
+confusionMatrix(pred2, testing$classe )
+```
+
+Results from the previos seccion indicates that random forest (0.9982) is more accurate than decesion tree (0.8741), so the former is selected.
+
+### Model validation
+
+The selected model is validated on the validation data set. The output is shown below.
+
+```{r model_validation, cache=TRUE}
+levels(validation$cvtd_timestamp) = levels(training$cvtd_timestamp)
+pred_val = predict( modFit2, newdata = validation, type = "class" )
+pred_val
+```
+
